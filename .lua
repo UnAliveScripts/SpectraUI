@@ -523,7 +523,7 @@ MacLib.RainbowConn = nil
 local function UpdateRainbow()
 	local hue = (tick() / MacLib.RainbowSpeed) % 1
 	local rainbowColor = Color3.fromHSV(hue, 0.85, 1)
-	for _, data in ipairs(ThemeElements) do
+	for _, data in pairs(ThemeElements) do
 		local obj = data.Object
 		if obj and obj.Parent then
 			if data.Role == "ToggleOn" then
@@ -601,11 +601,12 @@ end
 ThemeElements = setmetatable({}, {__mode = "v"})
 
 local function CleanupThemeElements(obj)
-	for i = #ThemeElements, 1, -1 do
-		if ThemeElements[i].Object == obj then
-			table.remove(ThemeElements, i)
-		end
-	end
+    for i = #ThemeElements, 1, -1 do
+        local data = ThemeElements[i]
+        if data and data.Object == obj then
+            table.remove(ThemeElements, i)
+        end
+    end
 end
 
 local function GetTextSizeSafe(text, textSize, maxWidth)
@@ -652,7 +653,7 @@ local function MakeGlass(width, height, searchTags)
 end
 
 -- ====================== RIPPLE EFFECT SYSTEM ======================
-local function CreateRipple(button, x, y)
+local function CreateRipple(button)
 	local ripple = Instance.new("Frame")
 	ripple.Name = "Ripple"
 	ripple.BackgroundColor3 = (button:IsA("TextButton") and button.TextColor3) or Color3.new(1, 1, 1)
@@ -663,10 +664,12 @@ local function CreateRipple(button, x, y)
 	local buttonSize = button.AbsoluteSize
 	local maxDim = math.max(buttonSize.X, buttonSize.Y)
 	ripple.Size = UDim2.fromOffset(0, 0)
-	ripple.Position = UDim2.fromOffset(x - button.AbsolutePosition.X, y - button.AbsolutePosition.Y)
+	local mousePos = UserInputService:GetMouseLocation()
+	ripple.Position = UDim2.fromOffset(
+		mousePos.X - button.AbsolutePosition.X,
+		mousePos.Y - button.AbsolutePosition.Y
+	)
 	ripple.AnchorPoint = Vector2.new(0.5, 0.5)
-
-	local corner = Instance.new("UICorner", ripple)
 	corner.CornerRadius = UDim.new(1, 0)
 
 	ripple.Parent = button
@@ -1309,8 +1312,7 @@ function MacLib:Notify(data)
 			b.ZIndex = 6
 			Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
 
-			b.MouseButton1Click:Connect(function(x, y)
-				CreateRipple(b, x, y)
+			b.MouseButton1Click:Connect(function() CreateRipple(b) ... end)
 				PlaySound("Click")
 				if btnData[2] then
 					pcall(btnData[2])
@@ -1642,9 +1644,9 @@ function MacLib:VerifyKey(settings)
 	end)
 
 	if validate(savedKey) and savedKey ~= "" then
-		success()
-		return self:Window({Title = settings.WindowTitle or "Dashboard"})
-	end
+    success()
+    return proxy
+    end
 
 	local proxy = {}
 	setmetatable(proxy, {
@@ -2152,7 +2154,8 @@ end)
 	function WindowFunctions:SetTransparency(alpha)
 		alpha = math.clamp(alpha, 0, 1)
 		local baseTrans = CurrentTheme.WindowTransparency
-		local newTrans = blurEnabled and (baseTrans + alpha * (1 - baseTrans)) or alpha
+        local blurOn = GetConfigValue("maclib_blur", Config.UseBlur)
+        local newTrans = blurOn and (baseTrans + alpha * (1 - baseTrans)) or alpha
 		main.BackgroundTransparency = newTrans
 		print("[MacLib] Window transparency set to:", newTrans)
 	end
@@ -2733,11 +2736,11 @@ end)
 					Highlight = function(self)
 						FlashHighlight(base)
 					end,
-						Destroy = function(self)
-							CleanupThemeElements(title)
-							CleanupThemeElements(content)
-							ReturnFrame(base)
-						end
+
+                    Destroy = function(self)
+                        if settings.Overlay then CleanupThemeElements(overlay) end
+                        ReturnFrame(base)
+                     end
 				}
 				return element
 			end
