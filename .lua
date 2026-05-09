@@ -1692,15 +1692,15 @@ function MacLib:Window(opts)
 		end
 	end
 
-	gui.AncestryChanged:Connect(function(_, parent)
-		if parent == nil then
-			SaveConfig(true)
-			if cursorConn then
-				pcall(function() cursorConn:Disconnect() end)
-				cursorConn = nil
-			end
-		end
-	end)
+gui.AncestryChanged:Connect(function(_, parent)
+    if parent == nil then
+        SaveConfig(true)
+        if MacLib.CursorConn then
+            pcall(function() MacLib.CursorConn:Disconnect() end)
+            MacLib.CursorConn = nil
+        end
+    end
+end)
 
 	local main = Instance.new("Frame")
 	main.AnchorPoint = Vector2.new(0.5,0.5)
@@ -2993,6 +2993,11 @@ function MacLib:Window(opts)
 					Instance = base
 				}
 				if settings.Flag then MacLib.Elements[settings.Flag] = element end
+
+				function element:Destroy()
+					if settings.Flag then MacLib.Elements[settings.Flag] = nil end
+					ReturnFrame(base)
+				end
 
 				function element:Set(newValue)
 					if typeof(newValue) ~= "string" then return end
@@ -6040,9 +6045,9 @@ function List:AddDropdown(data)
 		if blurSystem then
 			pcall(function() blurSystem:Destroy() end)
 		end
-		if self.ActiveGui then
-			pcall(function() self.ActiveGui:Destroy() end)
-			self.ActiveGui = nil
+		if MacLib.ActiveGui then
+			pcall(function() MacLib.ActiveGui:Destroy() end)
+			MacLib.ActiveGui = nil
 		end
 		if cursorGui then
 			pcall(function() cursorGui:Destroy() end)
