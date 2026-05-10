@@ -524,6 +524,12 @@ local function UpdateRainbow()
 	local hue = (tick() / MacLib.RainbowSpeed) % 1
 	local rainbowColor = Color3.fromHSV(hue, 0.85, 1)
 	for _, data in pairs(ThemeElements) do
+    if not data then continue end
+    local obj = data.Object
+    if obj and obj.Parent then
+        -- existing role logic
+    end
+end
 		local obj = data.Object
 		if obj and obj.Parent then
 			if data.Role == "ToggleOn" then
@@ -670,8 +676,9 @@ local function CreateRipple(button)
 		mousePos.Y - button.AbsolutePosition.Y
 	)
 	ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+	local corner = Instance.new("UICorner", ripple)
 	corner.CornerRadius = UDim.new(1, 0)
-
+	
 	ripple.Parent = button
 
 	Tween(ripple, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
@@ -1643,12 +1650,20 @@ function MacLib:VerifyKey(settings)
 		end
 	end)
 
-	if validate(savedKey) and savedKey ~= "" then
+
+local proxy = {}
+setmetatable(proxy, {
+    __index = function(t, k)
+        return function()
+            MacLib:Notify({Title = "Waiting", Message = "Please validate your key first.", Type = "error"})
+        end
+    end
+})
+
+if validate(savedKey) and savedKey ~= "" then
     success()
     return proxy
-    end
-
-	local proxy = {}
+end
 	setmetatable(proxy, {
 		__index = function(t, k)
 			return function() 
