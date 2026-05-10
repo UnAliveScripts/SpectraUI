@@ -1487,7 +1487,14 @@ function MacLib:BindToggle(keyName)
 				md = false
 			end
 		end)
-		UserInputService.InputChanged:Connect(function(inp)
+		-- In BindToggle:
+MacLib.MobileDragConn = UserInputService.InputChanged:Connect(...)
+
+-- In WindowFunctions:Destroy():
+if MacLib.MobileDragConn then
+    pcall(function() MacLib.MobileDragConn:Disconnect() end)
+    MacLib.MobileDragConn = nil
+end
 			if md and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 				local d = inp.Position - ms
 				btn.Position = UDim2.new(mp.X.Scale, mp.X.Offset + d.X, mp.Y.Scale, mp.Y.Offset + d.Y)
@@ -4888,6 +4895,14 @@ function List:AddDropdown(data)
 					local optionButtons = {}
 					local selectedOption
 					local selectedOptions = {}
+
+local function cloneTable(t)
+    local clone = {}
+    for k, v in pairs(t) do clone[k] = v end
+    return clone
+end
+-- usage:
+selectedOptions = cloneTable(initial)
 
 					if data.Multi then
 						local initial = data.Value
