@@ -524,12 +524,7 @@ local function UpdateRainbow()
 	local hue = (tick() / MacLib.RainbowSpeed) % 1
 	local rainbowColor = Color3.fromHSV(hue, 0.85, 1)
 	for _, data in pairs(ThemeElements) do
-    if not data then continue end
-    local obj = data.Object
-    if obj and obj.Parent then
-        -- existing role logic
-    end
-end
+		if not data then continue end
 		local obj = data.Object
 		if obj and obj.Parent then
 			if data.Role == "ToggleOn" then
@@ -996,7 +991,8 @@ end
 -- ====================== THEME SWITCHER ======================
 local function ApplyTheme(theme)
 	CurrentTheme = theme
-	for _, data in ipairs(ThemeElements) do
+	for _, data in pairs(ThemeElements) do
+		if not data then continue end
 		local obj = data.Object
 		if obj and obj.Parent then
 			if data.Role == "Window" then
@@ -1319,7 +1315,8 @@ function MacLib:Notify(data)
 			b.ZIndex = 6
 			Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
 
-			b.MouseButton1Click:Connect(function() CreateRipple(b) ... end)
+			b.MouseButton1Click:Connect(function()
+				CreateRipple(b)
 				PlaySound("Click")
 				if btnData[2] then
 					pcall(btnData[2])
@@ -1443,8 +1440,9 @@ function MacLib:BindToggle(keyName)
 	end
 
 	local keyEnum = Enum.KeyCode[self.ToggleKey]
+	local toggleKeyConn
 	if keyEnum then
-		UserInputService.InputBegan:Connect(function(inp, gpe)
+		toggleKeyConn = UserInputService.InputBegan:Connect(function(inp, gpe)
 			if not gpe and inp.KeyCode == keyEnum then
 				toggleUI()
 			end
@@ -1487,14 +1485,12 @@ function MacLib:BindToggle(keyName)
 				md = false
 			end
 		end)
-		-- In BindToggle:
-MacLib.MobileDragConn = UserInputService.InputChanged:Connect(...)
-
--- In WindowFunctions:Destroy():
-if MacLib.MobileDragConn then
-    pcall(function() MacLib.MobileDragConn:Disconnect() end)
-    MacLib.MobileDragConn = nil
-end
+		MacLib.MobileDragConn = UserInputService.InputChanged:Connect(function(inp)
+			if md and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+				local d = inp.Position - ms
+				btn.Position = UDim2.new(mp.X.Scale, mp.X.Offset + d.X, mp.Y.Scale, mp.Y.Offset + d.Y)
+			end
+		end)
 			if md and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 				local d = inp.Position - ms
 				btn.Position = UDim2.new(mp.X.Scale, mp.X.Offset + d.X, mp.Y.Scale, mp.Y.Offset + d.Y)
@@ -1660,24 +1656,19 @@ function MacLib:VerifyKey(settings)
 
 local proxy = {}
 setmetatable(proxy, {
-    __index = function(t, k)
-        return function()
-            MacLib:Notify({Title = "Waiting", Message = "Please validate your key first.", Type = "error"})
-        end
-    end
+	__index = function(t, k)
+		return function()
+			MacLib:Notify({Title = "Waiting", Message = "Please validate your key first.", Type = "error"})
+		end
+	end
 })
 
 if validate(savedKey) and savedKey ~= "" then
-    success()
-    return proxy
+	success()
+	local win = self:Window({Title = settings.WindowTitle or "Dashboard"})
+	for k, v in pairs(win) do proxy[k] = v end
+	return proxy
 end
-	setmetatable(proxy, {
-		__index = function(t, k)
-			return function() 
-				MacLib:Notify({Title = "Waiting", Message = "Please validate your key first.", Type = "error"})
-			end
-		end
-	})
 
 	local realSuccess = success
 	success = function()
@@ -1959,7 +1950,7 @@ end)
 			resizing = false
 		end
 	end)
-	UserInputService.InputChanged:Connect(function(inp)
+	local resizeConn = UserInputService.InputChanged:Connect(function(inp)
 		if resizing and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 			local delta = inp.Position - startMousePos
 			local minW = opts.MinSize and opts.MinSize.X or Config.MinWindowSize.X
@@ -1976,8 +1967,9 @@ end)
 	-- ====================== VIRTUAL KEYBOARD HANDLING ======================
 	local originalPosition = main.Position
 	local keyboardOffset = 0
+	local textFocusConn, textReleaseConn
 	if IsMobile then
-		UserInputService.TextBoxFocused:Connect(function(textbox)
+		textFocusConn = UserInputService.TextBoxFocused:Connect(function(textbox)
 			local viewport = workspace.CurrentCamera.ViewportSize
 			local kbHeight = viewport.Y * 0.42
 			local textboxBottom = textbox.AbsolutePosition.Y + textbox.AbsoluteSize.Y
@@ -1992,7 +1984,7 @@ end)
 				})
 			end
 		end)
-		UserInputService.TextBoxFocusReleased:Connect(function()
+		textReleaseConn = UserInputService.TextBoxFocusReleased:Connect(function()
 			if keyboardOffset > 0 then
 				Tween(main, TweenInfo.new(0.3), {Position = originalPosition})
 				keyboardOffset = 0
@@ -2001,11 +1993,19 @@ end)
 	end
 
 	local currentTab = nil
-	local WindowFunctions = {}
+	local WindowFunctions = {
+		_connections = {},
+	}
 
 	function WindowFunctions:Notify(data)
 		MacLib:Notify(data)
 	end
+
+	if toggleKeyConn then table.insert(WindowFunctions._connections, toggleKeyConn) end
+	if resizeConn then table.insert(WindowFunctions._connections, resizeConn) end
+	if dragConn then table.insert(WindowFunctions._connections, dragConn) end
+	if textFocusConn then table.insert(WindowFunctions._connections, textFocusConn) end
+	if textReleaseConn then table.insert(WindowFunctions._connections, textReleaseConn) end
 
 	function WindowFunctions:SaveConfig()
 		SaveConfig(true)
@@ -3547,7 +3547,8 @@ end)
 				state = newValue
 				element.Value = state
 				local newRole = state and "ToggleOn" or "ToggleOff"
-				for i, v in ipairs(ThemeElements) do
+				for _, v in pairs(ThemeElements) do
+					if not v then continue end
 					if v.Object == track then v.Role = newRole end
 				end
 				Tween(track, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
@@ -3734,8 +3735,8 @@ local function makeSlider(parent, settings)
 				end
 			end
 
-			track.InputBegan:Connect(onInputBegan)
-			UserInputService.InputEnded:Connect(function(inp)
+			table.insert(element._connections, track.InputBegan:Connect(onInputBegan))
+			table.insert(element._connections, UserInputService.InputEnded:Connect(function(inp)
 				if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
 					if drag then
 						drag = false
@@ -3746,12 +3747,12 @@ local function makeSlider(parent, settings)
 						dragTooltip.Visible = false
 					end
 				end
-			end)
-			UserInputService.InputChanged:Connect(function(inp)
+			end))
+			table.insert(element._connections, UserInputService.InputChanged:Connect(function(inp)
 				if drag and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 					updateFromInput(inp.Position.X)
 				end
-			end)
+			end))
 
 			track.MouseEnter:Connect(function() PlaySound("Hover") end)
 			-- Mobile touch hitbox
@@ -4286,7 +4287,8 @@ local function SetupCollapsible(base, card, settings, contentHolder)
 							fill:SetAttribute("Active", newValue)
 							fill.BackgroundColor3 = newValue and CurrentTheme.IconBtnActive or CurrentTheme.IconBtnInactive
 							fill.BackgroundTransparency = newValue and CurrentTheme.IconBtnActiveTransparency or CurrentTheme.IconBtnInactiveTransparency
-							for _, v in ipairs(ThemeElements) do
+							for _, v in pairs(ThemeElements) do
+								if not v then continue end
 								if v.Object == fill then
 									v.Role = newValue and "IconBtnActive" or "IconBtnInactive"
 								end
@@ -4838,7 +4840,7 @@ function List:AddDropdown(data)
 					local flag = data.Flag or data.ConfigId
 					local rawDefault
 					if data.Multi then
-						rawDefault = typeof(data.Value) == "table" and table.clone(data.Value) or (typeof(data.Value) == "string" and {data.Value} or {})
+						rawDefault = typeof(data.Value) == "table" and cloneTable(data.Value) or (typeof(data.Value) == "string" and {data.Value} or {})
 					else
 						rawDefault = data.Value or (data.Options and data.Options[1]) or nil
 					end
@@ -4907,14 +4909,14 @@ selectedOptions = cloneTable(initial)
 					if data.Multi then
 						local initial = data.Value
 						if typeof(initial) == "table" then
-							selectedOptions = table.clone(initial)
+							selectedOptions = cloneTable(initial)
 						elseif typeof(initial) == "string" then
 							table.insert(selectedOptions, initial)
 						end
 						if flag and MacLib.ConfigData[flag] ~= nil then
 							local saved = MacLib.ConfigData[flag]
 							if typeof(saved) == "table" then
-								selectedOptions = table.clone(saved)
+								selectedOptions = cloneTable(saved)
 							end
 						end
 					else
@@ -5122,7 +5124,7 @@ selectedOptions = cloneTable(initial)
 					function element:Set(newValue)
 						if data.Multi then
 							if typeof(newValue) ~= "table" then return end
-							selectedOptions = table.clone(newValue)
+							selectedOptions = cloneTable(newValue)
 							element.Value = selectedOptions
 							updateLabel()
 							optsFrame.Visible = false
@@ -6020,7 +6022,7 @@ selectedOptions = cloneTable(initial)
 			end
 		end
 	end)
-	UserInputService.InputChanged:Connect(function(inp)
+	local dragConn = UserInputService.InputChanged:Connect(function(inp)
 		if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 			local d = inp.Position - start
 			local viewport = workspace.CurrentCamera.ViewportSize
@@ -6075,6 +6077,14 @@ selectedOptions = cloneTable(initial)
 			pcall(function() MacLib.CursorConn:Disconnect() end)
 			MacLib.CursorConn = nil
 		end
+		if MacLib.MobileDragConn then
+			pcall(function() MacLib.MobileDragConn:Disconnect() end)
+			MacLib.MobileDragConn = nil
+		end
+		for _, conn in ipairs(WindowFunctions._connections or {}) do
+			if conn then pcall(function() conn:Disconnect() end) end
+		end
+		WindowFunctions._connections = {}
 		if blurSystem then
 			pcall(function() blurSystem:Destroy() end)
 		end
